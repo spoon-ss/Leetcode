@@ -1,4 +1,4 @@
-package com.leetcode;
+package com.leetcode.problem;
 
 public class LongestRepeatingCharacterReplacement {
     public int characterReplacement(String s, int k) {
