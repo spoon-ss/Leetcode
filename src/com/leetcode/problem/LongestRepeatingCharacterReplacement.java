@@ -1,7 +1,7 @@
 package com.leetcode.problem;
 
 public class LongestRepeatingCharacterReplacement {
-    public int characterReplacement(String s, int k) {
+    public synchronized int characterReplacement(String s, int k) {
 
 
         if(s == null || s.length () == 0){
