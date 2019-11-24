@@ -4,133 +4,160 @@ import java.util.HashMap;
 import java.util.Map;
 
 class LFUCache {
-    class Node{
-        int value;
-        int count;
-        Node next;
-        Node previous;
+    private class Node{
+        public int key;
+        public int value;
+        public int frequence;
+        public Node next;
+        public Node previous;
 
-        public Node(int value, int count){
+        public Node(int key, int value, int frequence){
+            this.key = key;
             this.value = value;
-            this.count = count;
+            this.frequence = frequence;
             this.next = null;
             this.previous = null;
         }
     }
+    private class DoubleLinkedList{
+        private Node dummyHead;
+        private Node tail;
+        public int size;
 
-    private Map<Integer, Node> freToNodeMap;
-    private Map<Integer, Node> keyToNodeMap;
-    private Node dummyHead;
-    private Node dummyTail;
-    private int size;
-    private int capacity;
+        public DoubleLinkedList(){
+            this.dummyHead = new Node(0, 0, 0);
+            this.tail = dummyHead;
+            this.size = 0;
+        }
 
-    public LFUCache(int capacity) {
-        this.freToNodeMap = new HashMap<>();
-        this.keyToNodeMap = new HashMap<>();
+        public void addAtHead(Node node){
+            if(size == 0){
+                dummyHead.next = node;
+                node.next = null;
+                node.previous = dummyHead;
+                tail = node;
+            }else{
+                Node next = dummyHead.next;
+                dummyHead.next = node;
+                node.next = next;
+                next.previous = node;
+                node.previous = dummyHead;
+            }
+            this.size += 1;
 
-        this.dummyHead = new Node(0, 0);
-        this.dummyTail = new Node(0, 0);
-        this.dummyHead.next = dummyTail;
-        this.dummyTail.previous = dummyHead;
+        }
+        public Node removeAtTail(){
+            if(size == 0){
+                return null;
+            }
+            Node deleteNode = this.tail;
+            Node previous = tail.previous;
+            previous.next = null;
+            tail = previous;
+            size -= 1;
+            return deleteNode;
+        }
+        public void removeNode(Node node){
+            if(node == tail){
+                removeAtTail();
+            }else{
+                Node next = node.next;
+                Node previous = node.previous;
+                node.next = null;
+                node.previous = null;
 
-        this.size = 0;
-        this.capacity = capacity;
+                previous.next = next;
+                next.previous = previous;
+                this.size -= 1;
+            }
+
+        }
+
+
     }
 
-    public int get(int key) {
+    private Map<Integer, Node> keyToNodeMap;
+    private Map<Integer, DoubleLinkedList> frequenceToListMap;
+    private int minFrequence;
+    private int capacity;
+    private int size;
+
+    public LFUCache(int capacity){
+        this.capacity = capacity;
+        keyToNodeMap = new HashMap<>();
+        frequenceToListMap = new HashMap<>();
+        minFrequence = -1;
+        this.capacity = capacity;
+        this.size = 0;
+    }
+
+
+    public int get(int key){
+        if(capacity == 0){
+            return -1;
+        }
         if(!keyToNodeMap.containsKey(key)){
             return -1;
         }
-        Node current = keyToNodeMap.get(key);
-        adjustNode(current);
-        return current.value;
-    }
+        Node node = keyToNodeMap.get(key);
+        DoubleLinkedList list = frequenceToListMap.get(node.frequence);
+        list.removeNode(node);
+        node.frequence += 1;
+        if(!frequenceToListMap.containsKey(node.frequence)){
+            frequenceToListMap.put(node.frequence, new DoubleLinkedList());
+        }
+        frequenceToListMap.get(node.frequence).addAtHead(node);
 
-    public void put(int key, int value) {
-        if(!keyToNodeMap.containsKey(key)){
-            Node node = new Node(value, 1);
-            if(this.size == this.capacity){
-                deleteNode(this.dummyTail.previous);
+        if(list.size == 0){
+            frequenceToListMap.remove(node.frequence - 1);
+            if(minFrequence == node.frequence - 1){
+                minFrequence += 1;
             }
-            Node head;
-            if(freToNodeMap.containsKey(1)){
-                head = freToNodeMap.get(1);
+        }
+        return node.value;
+
+
+    }
+    public void put(int key, int value){
+        if(capacity == 0){
+            return;
+        }
+        if(keyToNodeMap.containsKey(key)){
+            keyToNodeMap.get(key).value = value;
+            get(key);
+            return;
+        }
+        if(size == capacity){
+            DoubleLinkedList list = frequenceToListMap.get(minFrequence);
+            Node deleteNode = list.removeAtTail();
+            keyToNodeMap.remove(deleteNode.key);
+
+            if(list.size == 0){
+                frequenceToListMap.remove(minFrequence);
+            }
+            Node newNode = new Node(key, value, 1);
+            if(frequenceToListMap.containsKey(1)){
+                frequenceToListMap.get(1).addAtHead(newNode);
             }else{
-                head = this.dummyTail;
+                DoubleLinkedList newList = new DoubleLinkedList();
+                newList.addAtHead(newNode);
+                frequenceToListMap.put(1, newList);
             }
-            freToNodeMap.put(1, node);
-            insertBefore(node, head);
-            keyToNodeMap.put(key, node);
+            keyToNodeMap.put(key, newNode);
+            minFrequence = 1;
+        }else{
+            Node newNode = new Node(key, value, 1);
+            if(frequenceToListMap.containsKey(1)){
+                frequenceToListMap.get(1).addAtHead(newNode);
+            }else{
+                DoubleLinkedList newList = new DoubleLinkedList();
+                newList.addAtHead(newNode);
+                frequenceToListMap.put(1, newList);
+            }
+            keyToNodeMap.put(key, newNode);
+            minFrequence = 1;
             this.size += 1;
-        }else{
-            Node node = keyToNodeMap.get(key);
-            node.value = value;
-            adjustNode(node);
         }
 
-    }
-
-    private void adjustNode(Node node){
-
-        int oldCount = node.count;
-        int newCount = node.count + 1;
-        node.count += 1;
-
-        if(freToNodeMap.get(oldCount) != node){
-            Node head;
-            if(!freToNodeMap.containsKey(newCount)){
-                head = freToNodeMap.get(oldCount);
-            }else{
-                head = freToNodeMap.get(newCount);
-            }
-            insertBefore(node, head);
-            freToNodeMap.put(newCount, node);
-        }else{
-            if(node.next == this.dummyTail || node.next.count != node.count){
-                freToNodeMap.remove(oldCount);
-            }else if(node.next.count == oldCount){
-                freToNodeMap.put(oldCount, node.next);
-            }
-
-            if(!freToNodeMap.containsKey(newCount)){
-                freToNodeMap.put(newCount, node);
-            }else{
-                insertBefore(node, freToNodeMap.get(node.count));
-                freToNodeMap.put(newCount, node);
-            }
-
-        }
-    }
-
-    private void insertBefore(Node insertingNode, Node insertedNode){
-        Node previousNode = insertingNode.previous;
-        Node afterNode = insertingNode.next;
-        previousNode.next = afterNode;
-        afterNode.previous = previousNode;
-
-        insertingNode.next = null;
-        insertingNode.previous = null;
-
-        previousNode = insertedNode.previous;
-        previousNode.next = insertingNode;
-        insertingNode.next = insertedNode;
-        insertingNode.previous = previousNode;
-        insertedNode.previous = insertingNode;
-    }
-
-    private void deleteNode(Node node){
-        if(freToNodeMap.get(node.count) == node){
-            if(node.next == this.dummyTail || node.next.count != node.count){
-                freToNodeMap.remove(node.count);
-            }else if(node.next.count == node.count){
-                freToNodeMap.put(node.count, node.next);
-            }
-        }
-        Node next = node.next;
-        Node previous = node.previous;
-        previous.next = next;
-        next.previous = previous;
-        this.size -= 1;
     }
 }
